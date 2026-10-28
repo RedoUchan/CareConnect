@@ -1,0 +1,142 @@
+@web_HostAddress = http://localhost:5164
+
+### 1. ĐĂNG NHẬP BÁC SĨ (doctor@hospital.com)
+# Bác sĩ đăng nhập để lấy JWT Token
+# Mật khẩu mặc định: 123456
+# @name doctorLogin
+POST {{web_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "doctor@hospital.com",
+  "password": "123456"
+}
+
+### Lưu token của bác sĩ
+@doctorToken = {{doctorLogin.response.body.token}}
+
+
+### 2. LẤY DANH MỤC THUỐC (Doctor/Pharmacist/All)
+# Xem danh sách thuốc hiện có trong kho và đơn giá bán lẻ
+GET {{web_HostAddress}}/api/medicines
+Authorization: Bearer {{doctorToken}}
+Accept: application/json
+
+
+### 3. BÁC SĨ TẠO BỆNH ÁN (Có chỉ định cận lâm sàng & kê đơn thuốc chi tiết)
+# Bác sĩ tạo hồ sơ bệnh án cho bệnh nhân Alice (PatientId = 3)
+# Đơn thuốc gồm: Paracetamol 500mg (MedicineId = 1) x 10 viên và Amoxicillin 500mg (MedicineId = 2) x 10 viên
+# Chỉ định cận lâm sàng: Siêu âm ổ bụng (Phí: 150,000 VND) và Chụp X-quang phổi (Phí: 200,000 VND)
+# Bệnh nhân Alice có PatientType là BHYT (hoặc bạn có thể cập nhật thông tin nếu muốn)
+# @name createRecord
+POST {{web_HostAddress}}/api/medicalrecords
+Authorization: Bearer {{doctorToken}}
+Content-Type: application/json
+
+{
+  "patientId": 3,
+  "appointmentId": 1,
+  "diagnosis": "Viêm xoang cấp kèm mệt mỏi suy nhược.",
+  "treatment": "Uống thuốc đầy đủ, uống nhiều nước ấm và hạn chế tiếp xúc lạnh.",
+  "prescription": "Paracetamol và Amoxicillin liều 5 ngày.",
+  "prescriptionDetails": [
+    {
+      "medicineId": 1,
+      "quantity": 10,
+      "usageInstruction": "Uống 1 viên khi sốt trên 38.5 độ C"
+    },
+    {
+      "medicineId": 2,
+      "quantity": 10,
+      "usageInstruction": "Uống 1 viên sau ăn sáng, 1 viên sau ăn tối"
+    }
+  ],
+  "labRequests": [
+    {
+      "labType": "Siêu âm ổ bụng tổng quát",
+      "fee": 150000
+    },
+    {
+      "labType": "Chụp X-quang phổi",
+      "fee": 200000
+    }
+  ]
+}
+
+### Lưu thông tin bệnh án vừa tạo
+@recordId = {{createRecord.response.body.medicalRecordId}}
+@labId = {{createRecord.response.body.labRequests[0].labRequestId}}
+
+
+### 4. ĐĂNG NHẬP KỸ THUẬT VIÊN CẬN LÂM SÀNG (labtech@hospital.com)
+# @name labtechLogin
+POST {{web_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "labtech@hospital.com",
+  "password": "123456"
+}
+
+### Lưu token của KTV cận lâm sàng
+@labtechToken = {{labtechLogin.response.body.token}}
+
+
+### 5. KTV CẬP NHẬT KẾT QUẢ CẬN LÂM SÀNG
+# KTV cập nhật kết quả siêu âm ổ bụng
+PUT {{web_HostAddress}}/api/medicalrecords/{{recordId}}/labs/{{labId}}
+Authorization: Bearer {{labtechToken}}
+Content-Type: application/json
+
+{
+  "results": "Gan mật bình thường, không phát hiện sỏi hoặc tổn thương bất thường.",
+  "imageUrl": "http://example.com/images/ultrasound-alice.png"
+}
+
+
+### 6. ĐĂNG NHẬP KẾ TOÁN/TÀI CHÍNH (finance@hospital.com)
+# @name financeLogin
+POST {{web_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "finance@hospital.com",
+  "password": "123456"
+}
+
+### Lưu token của Kế toán
+@financeToken = {{financeLogin.response.body.token}}
+
+
+### 7. XEM HỒ SƠ BỆNH ÁN ĐỂ KIỂM TRA PHÍ & BHYT
+# Kế toán xem toàn bộ hồ sơ bệnh án để thu tiền
+# Chú ý các trường: totalFee, insuranceCoveredFee, patientCoPayFee
+GET {{web_HostAddress}}/api/medicalrecords/my-records
+Authorization: Bearer {{financeToken}}
+Accept: application/json
+
+
+### 8. THANH TOÁN VIỆN PHÍ & TIỀN THUỐC
+# Bệnh nhân Alice thanh toán phần đồng chi trả (patientCoPayFee)
+PUT {{web_HostAddress}}/api/medicalrecords/{{recordId}}/pay
+Authorization: Bearer {{financeToken}}
+
+
+### 9. ĐĂNG NHẬP DƯỢC SĨ (pharmacist@hospital.com)
+# @name pharmacistLogin
+POST {{web_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "pharmacist@hospital.com",
+  "password": "123456"
+}
+
+### Lưu token của Dược sĩ
+@pharmacistToken = {{pharmacistLogin.response.body.token}}
+
+
+### 10. DƯỢC SĨ XÁC NHẬN CẤP PHÁT THUỐC
+# Duyệt cấp phát thuốc và trừ tồn kho sau khi bệnh nhân đã thanh toán
+PUT {{web_HostAddress}}/api/medicalrecords/{{recordId}}/dispense
+Authorization: Bearer {{pharmacistToken}}
