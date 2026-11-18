@@ -1,0 +1,10 @@
+**/.git
+**/.idea
+**/bin
+**/obj
+**/.vs
+hospital.db-shm
+hospital.db-wal
+mobile_client
+scratch_excel
+
